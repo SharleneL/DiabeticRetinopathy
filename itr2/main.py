@@ -1,10 +1,8 @@
 from pyspark.ml import Pipeline
-from pyspark.ml.classification import LogisticRegression
-from pyspark.ml.feature import HashingTF, Tokenizer
 from pyspark.sql import *
 from pyspark.context import *
 from pyspark.ml.classification import RandomForestClassifier
-import pandas as pd
+from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 from pyspark.ml.feature import StringIndexer, VectorIndexer
 
 from preprocess import get_df
@@ -14,24 +12,11 @@ csv_fpath = '../output/output.csv'
 sc = SparkContext()
 sqlContext = SQLContext(sc)
 
-# taxiFile = sc.textFile(csv_fpath)
-
-# pandas_df = pd.read_csv(csv_fpath)  # assuming the file contains a header
+# GET DATA FRAME
 pandas_df = get_df(csv_fpath)
-# pandas_df = pd.read_csv('file.csv', names = ['column 1','column 2']) # if no header
 train_df = sqlContext.createDataFrame(pandas_df)
 
-
-# # lr
-# lr = LogisticRegression(maxIter=10, regParam=0.01)
-# pipeline = Pipeline(stages=[lr])
-# # Fit the pipeline to training documents.
-# model = pipeline.fit(train_df)
-
-
-
-
-# rf
+# RANDOM FOREST
 # Index labels, adding metadata to the label column.
 # Fit on whole dataset to include all labels in index.
 labelIndexer = StringIndexer(inputCol="label", outputCol="indexedLabel").fit(train_df)
@@ -41,9 +26,10 @@ featureIndexer =\
     VectorIndexer(inputCol="features", outputCol="indexedFeatures", maxCategories=4).fit(train_df)
 
 # Split the data into training and test sets (30% held out for testing)
-(trainingData, testData) = train_df.randomSplit([0.7, 0.3])
+# (trainingData, testData) = train_df.randomSplit([0.7, 0.3])
+trainingData = train_df
 
-# Train a RandomForest model.
+# Train a RandomForest model
 rf = RandomForestClassifier(labelCol="indexedLabel", featuresCol="indexedFeatures")
 
 # Chain indexers and forest in a Pipeline
@@ -52,20 +38,28 @@ pipeline = Pipeline(stages=[labelIndexer, featureIndexer, rf])
 # Train model.  This also runs the indexers.
 model = pipeline.fit(trainingData)
 
-# Make predictions.
-predictions = model.transform(testData)
+# Make predictions
+predictions = model.transform(trainingData)
 
 print '***prediction***'
-print predictions.show()
+predictions.select("prediction", "indexedLabel", "features").show()
+
+
+# Select (prediction, true label) and compute test error
+evaluator = MulticlassClassificationEvaluator(
+    labelCol="indexedLabel", predictionCol="prediction", metricName="precision")
+accuracy = evaluator.evaluate(predictions)
+print "Test Error = %g" % (1.0 - accuracy)
+
+rfModel = model.stages[2]
+print rfModel  # summary only
+raw_input("prediction...")
 
 
 
-
-
-
-# Make predictions on test documents and print columns of interest.
-prediction = model.transform(train_df)
-selected = prediction
-for row in selected.collect():
-    print('*** ***')
-    print(row)
+# # Make predictions on test documents and print columns of interest.
+# prediction = model.transform(train_df)
+# selected = prediction
+# for row in selected.collect():
+#     print('*** ***')
+#     print(row)
