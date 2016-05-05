@@ -4,27 +4,33 @@ import os
 import numpy as np
 import cv2
 import fnmatch
-import pandas as pd
-from pyspark.mllib.linalg import Vectors
 
 STANDARD_SIZE = 2700, 1800
 
 
 def main():
-    f_dir = '../data/sample/'
+    f_dir = '../data/train/'
     label_fpath = '../data/trainLabels.csv'
-    output_fpath = '../output/output.csv'
+    output_fpath = '../output/1000_feature_output.csv'
     pca_dim = 5     # how many features pca will maintain for each img
     dim = (2700, 1800)
+    sample_amt = 1000
 
     # get all img file paths
     img_fpath_list = []
     img_name_list = []
+    i = 0
     for root, dirs, files in os.walk(f_dir):
         for file in files:
+            print 'read in file#' + str(i)
+            if i >= sample_amt:
+                break
             img_name_list.append(file)
             fpath = os.path.join(root, file)
             img_fpath_list.append(fpath)
+            i += 1
+        if i >= sample_amt:
+            break
 
     img_fpath_list = fnmatch.filter(img_fpath_list, '*.jpeg')
     img_name_list = fnmatch.filter(img_name_list, '*.jpeg')
@@ -33,9 +39,11 @@ def main():
     # get label dict
     label_dic = get_label_dic(label_fpath)  # <str, str>
 
+    print 'l42'
     # get feature for all img files
     with open(output_fpath, "a") as f:
         for i in range(len(img_fpath_list)):
+            print 'process line#' + str(i)
             img_fpath = img_fpath_list[i]
             img_name = img_name_list[i]
             # read
@@ -81,22 +89,7 @@ def get_label_dic(label_fpath):
     return label_dic
 
 
-def get_df(fpath):
-    col_list = ['label', 'features']
-    f = open(fpath)
 
-    df_list = []
-    with open(fpath) as f:
-        line = f.readline().strip()
-        while line != '':
-            line_list = line.split(',')
-            label = float(line_list[0])
-            features = Vectors.dense([float(k) for k in line_list[1:]])
-            df_list.append([label, features])
-            line = f.readline().strip()
-
-    df = pd.DataFrame(df_list, columns=col_list)
-    return df
 
 
 if __name__ == '__main__':
